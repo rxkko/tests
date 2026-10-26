@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Вход — Учебные тесты{% endblock %}
+{% block content %}
+<div class="center-screen">
+  <div class="big-emoji">🔐</div>
+  <h1>Вход для учителей</h1>
+  <div class="card" style="width:100%;max-width:380px">
+    <form method="post" action="/login">
+      <div class="form-field">
+        <label>Логин</label>
+        <input type="text" name="username" required autofocus>
+      </div>
+      <div class="form-field">
+        <label>Пароль</label>
+        <input type="password" name="password" required>
+      </div>
+      {% if error %}
+        <p class="small" style="color:var(--danger)">Неверный логин или пароль</p>
+      {% endif %}
+      <button class="btn big" type="submit">Войти</button>
+    </form>
+  </div>
+  <a href="/" class="small">← На главную</a>
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Учителя — админ{% endblock %}
+{% block content %}
+<header class="top">
+  <div class="wrap">
+    <h1>Управление учителями</h1>
+    <div class="row">
+      <a href="/dashboard">Тесты</a>
+      <span class="small" style="opacity:.9">{{ user.username }}</span>
+      <a href="/logout">Выйти</a>
+    </div>
+  </div>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>Добавить учителя</h2>
+    <form method="post" action="/admin/teachers">
+      <div class="form-field">
+        <label>Логин</label>
+        <input type="text" name="username" required>
+      </div>
+      <div class="form-field">
+        <label>Пароль</label>
+        <input type="password" name="password" required>
+      </div>
+      {% if error == 'exists' %}
+        <p class="small" style="color:var(--danger)">Такой логин уже существует</p>
+      {% endif %}
+      <button type="submit" class="btn">Добавить учителя</button>
+    </form>
+  </div>
+
+  <h2>Учителя</h2>
+  {% if teachers %}
+    {% for t in teachers %}
+      <div class="list-item">
+        <div class="main">
+          <div class="title">{{ t.username }}</div>
+          <div class="sub">учитель</div>
+        </div>
+        <form method="post" action="/admin/teachers/{{ t.id }}/delete"
+              onsubmit="return confirm('Удалить учителя «{{ t.username }}»?')">
+          <button type="submit" class="btn danger">Удалить</button>
+        </form>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card muted">Учителей пока нет.</div>
+  {% endif %}
+</main>
+{% endblock %}
