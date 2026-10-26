@@ -4,7 +4,11 @@
 <header class="top">
   <div class="wrap">
     <h1>Учебные тесты</h1>
-    <a href="/join">Я ученик → ввести код</a>
+    <div class="row">
+      {% if user.role == 'superadmin' %}<a href="/admin">Учителя</a>{% endif %}
+      <span class="small" style="opacity:.9">{{ user.username }}</span>
+      <a href="/logout">Выйти</a>
+    </div>
   </div>
 </header>
 <main class="container">

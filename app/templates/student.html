@@ -23,10 +23,38 @@ const ws = new WebSocket(
 
 const app = document.getElementById('app');
 let myOptionId = null;
+let countdownTimer = null;
+let countdownRemaining = 0;
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderCountdown() {
+  const el = document.getElementById('countdown');
+  if (el) el.textContent = `⏱ ${countdownRemaining} с`;
+}
+
+function startCountdown(seconds) {
+  stopCountdown();
+  countdownRemaining = seconds;
+  renderCountdown();
+  countdownTimer = setInterval(() => {
+    countdownRemaining--;
+    if (countdownRemaining <= 0) {
+      stopCountdown();
+      return;
+    }
+    renderCountdown();
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
 }
 
 function leaderboardHtml(items) {
@@ -63,11 +91,12 @@ function showQuestion(msg) {
     <div class="card">
       <div class="spread mb">
         <span class="badge active">Вопрос ${msg.index + 1} из ${msg.total}</span>
-        <span class="small muted">${msg.time_limit} сек</span>
+        <span class="small muted" id="countdown"></span>
       </div>
       <div style="font-size:1.2rem;font-weight:600;margin-bottom:14px">${escapeHtml(msg.text)}</div>
       <div class="options">${opts}</div>
     </div>`;
+  startCountdown(msg.time_limit);
 
   app.querySelectorAll('.option-btn').forEach(btn => {
     btn.onclick = () => {
@@ -83,6 +112,7 @@ function showQuestion(msg) {
 }
 
 function showResult(msg) {
+  stopCountdown();
   // перерисовать текущий вопрос с подсветкой, если он ещё на экране
   const buttons = app.querySelectorAll('.option-btn');
   buttons.forEach(b => {
@@ -135,12 +165,25 @@ function showClosed() {
     </div>`;
 }
 
+function showAnswered() {
+  app.querySelectorAll('.option-btn').forEach(b => { b.disabled = true; });
+  let tail = document.getElementById('result-tail');
+  if (!tail) {
+    tail = document.createElement('div');
+    tail.id = 'result-tail';
+    tail.className = 'card mt text-center';
+    app.appendChild(tail);
+  }
+  tail.innerHTML = '<div class="muted small">Ответ отправлен — ждём остальных или окончание времени…</div>';
+}
+
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   switch (m.type) {
     case 'lobby': showLobby(m); break;
     case 'question': showQuestion(m); break;
     case 'answer_result': showResult(m); break;
+    case 'answered': showAnswered(); break;
     case 'waiting': showWaiting(); break;
     case 'finished': showFinished(m); break;
     case 'closed': showClosed(); break;

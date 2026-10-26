@@ -60,6 +60,9 @@ const S = {
 
 const $ = (id) => document.getElementById(id);
 
+let countdownTimer = null;
+let countdownRemaining = 0;
+
 function leaderboardHtml(items) {
   return items.map((p, i) => `
     <li>
@@ -81,6 +84,32 @@ function participantsHtml(items) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderCountdown() {
+  const el = document.getElementById('countdown');
+  if (el) el.textContent = `⏱ ${countdownRemaining} с`;
+}
+
+function startCountdown(seconds) {
+  stopCountdown();
+  countdownRemaining = seconds;
+  renderCountdown();
+  countdownTimer = setInterval(() => {
+    countdownRemaining--;
+    if (countdownRemaining <= 0) {
+      stopCountdown();
+      return;
+    }
+    renderCountdown();
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
 }
 
 function renderQuestion(q, revealed) {
@@ -128,9 +157,8 @@ function renderControls() {
       renderQuestion(S.question, false);
       c.innerHTML = `
         <h2>Идёт ответ на вопрос</h2>
-        <p class="muted">Ученики выбирают ответ. Нажмите, когда все ответят.</p>
-        <button class="btn big" id="btnReveal">Открыть правильный ответ</button>`;
-      $('btnReveal').onclick = () => ws.send(JSON.stringify({ type: 'reveal' }));
+        <p class="muted">Правильный ответ откроется автоматически — когда все ответят или закончится время.</p>
+        <div style="font-size:1.8rem;font-weight:800;text-align:center" id="countdown">⏱ ${countdownRemaining} с</div>`;
     } else {
       renderQuestion(S.question, true);
       c.innerHTML = `
@@ -174,6 +202,11 @@ ws.onmessage = (e) => {
     S.question = m.question;
     S.participants = m.participants || [];
     S.answered = 0;
+    if (S.status === 'active' && S.phase === 'answering' && S.question) {
+      startCountdown(S.question.time_limit);
+    } else {
+      stopCountdown();
+    }
     render();
   } else if (m.type === 'question') {
     S.index = m.index;
@@ -182,11 +215,13 @@ ws.onmessage = (e) => {
     S.question = m.question;
     S.participants = m.participants || S.participants;
     S.answered = 0;
+    if (S.phase === 'answering' && S.question) startCountdown(S.question.time_limit);
     render();
   } else if (m.type === 'revealed') {
     S.phase = 'revealed';
     S.question = m.question;
     S.participants = m.participants || S.participants;
+    stopCountdown();
     render();
   } else if (m.type === 'participants') {
     S.participants = m.participants;
@@ -198,6 +233,7 @@ ws.onmessage = (e) => {
   } else if (m.type === 'finished') {
     S.status = 'finished';
     S.leaderboard = m.leaderboard;
+    stopCountdown();
     render();
   }
 };

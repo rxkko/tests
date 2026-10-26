@@ -14,6 +14,17 @@ from sqlalchemy.orm import relationship
 from .database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False, unique=True)
+    password_hash = Column(String, nullable=False)
+    # "superadmin" | "teacher"
+    role = Column(String, nullable=False, default="teacher")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class Subject(Base):
     __tablename__ = "subjects"
 
