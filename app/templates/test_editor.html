@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ test.title }} — редактор{% endblock %}
+{% block content %}
+<header class="top">
+  <div class="wrap">
+    <h1>{{ test.title }}</h1>
+    <a href="/subjects/{{ test.subject_id }}">← Назад</a>
+  </div>
+</header>
+<main class="container">
+  <div class="card">
+    <div class="spread">
+      <div>
+        <h2 style="margin:0">Вопросы</h2>
+        <div class="small muted">{{ test.questions|length }} вопрос(ов)</div>
+      </div>
+      {% if test.questions|length >= 1 %}
+        <form method="post" action="/tests/{{ test.id }}/start">
+          <button type="submit" class="btn success big">Запустить тест</button>
+        </form>
+      {% endif %}
+    </div>
+    {% if test.questions|length == 0 %}
+      <p class="muted mt">Добавьте хотя бы один вопрос, чтобы запустить тест.</p>
+    {% endif %}
+  </div>
+
+  {% for q in test.questions %}
+    <div class="question-block">
+      <div class="spread">
+        <strong>{{ loop.index }}. {{ q.text }}</strong>
+        <form method="post" action="/tests/{{ test.id }}/questions/{{ q.id }}/delete"
+              onsubmit="return confirm('Удалить вопрос?')">
+          <button type="submit" class="btn danger" style="padding:6px 12px">Удалить</button>
+        </form>
+      </div>
+      <div class="small muted">Время: {{ q.time_limit }} с</div>
+      <div class="q-options">
+        {% for o in q.options %}
+          <div>{{ loop.index }}) {{ o.text }}{% if o.is_correct %} <span class="ok">✓ верный</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <div class="card">
+    <h2>Добавить вопрос</h2>
+    <div class="form-field">
+      <label>Текст вопроса</label>
+      <input type="text" id="q-text" placeholder="Введите вопрос">
+    </div>
+    <div class="form-field">
+      <label>Время на ответ (секунд)</label>
+      <input type="number" id="q-time" value="30" min="5" max="300">
+    </div>
+    <div class="form-field">
+      <label>Варианты ответа (отметьте правильный)</label>
+      <div id="options"></div>
+      <button type="button" class="btn secondary" id="add-option">+ Добавить вариант</button>
+    </div>
+    <div id="form-error" class="small" style="color:var(--danger)"></div>
+    <button type="button" class="btn" id="save-question">Сохранить вопрос</button>
+  </div>
+</main>
+
+<script>
+const testId = {{ test.id }};
+const optionsEl = document.getElementById('options');
+let optionCount = 0;
+
+function addOption(text = '') {
+  optionCount++;
+  const row = document.createElement('div');
+  row.className = 'option-row';
+  row.innerHTML = `
+    <input type="radio" name="correct" value="${optionCount}">
+    <input type="text" class="opt-text" placeholder="Вариант ${optionCount}">
+    <button type="button" class="btn danger" style="padding:8px 10px">✕</button>`;
+  row.querySelector('input[type="text"]').value = text;
+  row.querySelector('button').onclick = () => row.remove();
+  row.querySelector('input[type="radio"]').onchange = () => {
+    document.querySelectorAll('#options input[type="radio"]').forEach(r => {
+      if (r !== row.querySelector('input[type="radio"]')) r.checked = false;
+    });
+  };
+  optionsEl.appendChild(row);
+}
+
+addOption();
+addOption();
+
+document.getElementById('add-option').onclick = () => addOption();
+
+document.getElementById('save-question').onclick = async () => {
+  const err = document.getElementById('form-error');
+  err.textContent = '';
+  const text = document.getElementById('q-text').value.trim();
+  const time = parseInt(document.getElementById('q-time').value || '30', 10);
+  const rows = [...optionsEl.querySelectorAll('.option-row')];
+  const options = rows.map(r => ({
+    text: r.querySelector('.opt-text').value.trim(),
+    is_correct: r.querySelector('input[type="radio"]').checked
+  })).filter(o => o.text);
+
+  if (!text) { err.textContent = 'Введите текст вопроса'; return; }
+  if (options.length < 2) { err.textContent = 'Нужно минимум 2 варианта'; return; }
+  if (!options.some(o => o.is_correct)) { err.textContent = 'Отметьте правильный ответ'; return; }
+
+  const res = await fetch(`/tests/${testId}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, time_limit: time, options })
+  });
+  if (res.ok) {
+    location.reload();
+  } else {
+    const data = await res.json().catch(() => ({}));
+    err.textContent = data.detail || 'Ошибка сохранения';
+  }
+};
+</script>
+{% endblock %}

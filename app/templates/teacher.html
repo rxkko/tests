@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Панель преподавателя{% endblock %}
+{% block content %}
+<header class="top">
+  <div class="wrap">
+    <h1>{{ test.title }}</h1>
+    <a href="/tests/{{ test.id }}/edit">Редактор</a>
+  </div>
+</header>
+<main class="container">
+  <div class="code-box" id="codeBox" style="display:none">
+    <div class="small" style="color:#94a3b8">Код для учеников</div>
+    <div class="code" id="codeValue">—</div>
+    <div class="hint">Ученики вводят этот код на телефоне</div>
+  </div>
+
+  <div class="grid-2 mt">
+    <div class="card">
+      <h2>Участники <span class="muted small" id="partsCount"></span></h2>
+      <ul class="participants" id="participants"></ul>
+    </div>
+
+    <div class="card">
+      <div id="controls"></div>
+    </div>
+  </div>
+
+  <div class="card" id="questionCard" style="display:none">
+    <div class="spread mb">
+      <h2 style="margin:0">Вопрос <span id="qIndex"></span></h2>
+      <span class="muted small" id="progress"></span>
+    </div>
+    <div id="questionText" style="font-size:1.15rem;font-weight:600"></div>
+    <div class="options mt" id="questionOptions"></div>
+  </div>
+
+  <div class="card" id="leaderboardCard" style="display:none">
+    <h2 class="text-center">🏆 Результаты</h2>
+    <ul class="leaderboard" id="leaderboard"></ul>
+  </div>
+</main>
+
+<script>
+const testId = {{ test.id }};
+const ws = new WebSocket(
+  (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/teacher/' + testId
+);
+
+const S = {
+  status: '{{ test.status }}',
+  code: null,
+  phase: null,
+  index: 0,
+  total: 0,
+  question: null,
+  participants: [],
+  answered: 0,
+  leaderboard: null,
+};
+
+const $ = (id) => document.getElementById(id);
+
+function leaderboardHtml(items) {
+  return items.map((p, i) => `
+    <li>
+      <span class="pos">${i + 1}</span>
+      <span class="name">${escapeHtml(p.name)}</span>
+      <span class="pts">${p.score}</span>
+    </li>`).join('');
+}
+
+function participantsHtml(items) {
+  const sorted = [...items].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return sorted.map((p, i) => `
+    <li>
+      <span><span class="rank">${i + 1}.</span>${escapeHtml(p.name)}</span>
+      <span class="score">${p.score}</span>
+    </li>`).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderQuestion(q, revealed) {
+  $('questionCard').style.display = 'block';
+  $('questionText').textContent = q.text;
+  $('qIndex').textContent = `${S.index + 1} / ${S.total}`;
+  $('questionOptions').innerHTML = q.options.map((o, i) => {
+    let cls = 'option-btn';
+    if (revealed && o.is_correct) cls += ' correct';
+    const mark = revealed && o.is_correct ? ' ✓' : '';
+    return `<div class="${cls}">${i + 1}) ${escapeHtml(o.text)}${mark}</div>`;
+  }).join('');
+}
+
+function renderControls() {
+  const c = $('controls');
+  const codeBox = $('codeBox');
+
+  if (S.status === 'lobby' || S.status === 'active') {
+    codeBox.style.display = 'block';
+    $('codeValue').textContent = S.code || '—';
+  } else {
+    codeBox.style.display = 'none';
+  }
+
+  if (S.status === 'draft') {
+    c.innerHTML = `<p class="muted">Тест ещё не запущен.</p>
+      <a class="btn" href="/tests/${testId}/edit">Перейти в редактор</a>`;
+    return;
+  }
+
+  if (S.status === 'lobby') {
+    c.innerHTML = `
+      <h2>Ожидание участников</h2>
+      <p class="muted">Ученики вводят код на телефонах и появляются в списке слева.</p>
+      <button class="btn big success" id="btnStart">Начать викторину</button>`;
+    $('btnStart').onclick = () => ws.send(JSON.stringify({ type: 'start' }));
+    return;
+  }
+
+  if (S.status === 'active') {
+    const isLast = S.index === S.total - 1;
+    if (S.phase === 'answering') {
+      $('progress').textContent = `Ответили: ${S.answered} / ${S.participants.length}`;
+      renderQuestion(S.question, false);
+      c.innerHTML = `
+        <h2>Идёт ответ на вопрос</h2>
+        <p class="muted">Ученики выбирают ответ. Нажмите, когда все ответят.</p>
+        <button class="btn big" id="btnReveal">Открыть правильный ответ</button>`;
+      $('btnReveal').onclick = () => ws.send(JSON.stringify({ type: 'reveal' }));
+    } else {
+      renderQuestion(S.question, true);
+      c.innerHTML = `
+        <h2>Правильный ответ показан</h2>
+        <button class="btn big success" id="btnNext">${isLast ? 'Показать результаты' : 'Следующий вопрос'}</button>`;
+      $('btnNext').onclick = () => ws.send(JSON.stringify({ type: isLast ? 'finish' : 'next' }));
+    }
+    return;
+  }
+
+  if (S.status === 'finished') {
+    c.innerHTML = `
+      <h2>Тест завершён</h2>
+      <button class="btn big" id="btnRestart">Перезапустить (новый код)</button>`;
+    $('btnRestart').onclick = () => ws.send(JSON.stringify({ type: 'restart' }));
+  }
+}
+
+function render() {
+  $('partsCount').textContent = `(${S.participants.length})`;
+  $('participants').innerHTML = participantsHtml(S.participants) ||
+    '<li class="muted small">Пока никто не подключился</li>';
+  if (S.status === 'finished' && S.leaderboard) {
+    $('leaderboardCard').style.display = 'block';
+    $('leaderboard').innerHTML = leaderboardHtml(S.leaderboard);
+    $('questionCard').style.display = 'none';
+  } else {
+    $('leaderboardCard').style.display = 'none';
+  }
+  renderControls();
+}
+
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.type === 'state') {
+    S.status = m.status;
+    S.code = m.code;
+    S.phase = m.phase;
+    S.index = m.index;
+    S.total = m.total;
+    S.question = m.question;
+    S.participants = m.participants || [];
+    S.answered = 0;
+    render();
+  } else if (m.type === 'question') {
+    S.index = m.index;
+    S.total = m.total;
+    S.phase = m.phase;
+    S.question = m.question;
+    S.participants = m.participants || S.participants;
+    S.answered = 0;
+    render();
+  } else if (m.type === 'revealed') {
+    S.phase = 'revealed';
+    S.question = m.question;
+    S.participants = m.participants || S.participants;
+    render();
+  } else if (m.type === 'participants') {
+    S.participants = m.participants;
+    render();
+  } else if (m.type === 'progress') {
+    S.answered = m.answered;
+    S.participants = m.participants || S.participants;
+    render();
+  } else if (m.type === 'finished') {
+    S.status = 'finished';
+    S.leaderboard = m.leaderboard;
+    render();
+  }
+};
+
+ws.onclose = () => {
+  $('controls').innerHTML = '<p class="muted">Соединение потеряно. Обновите страницу.</p>';
+};
+
+render();
+</script>
+{% endblock %}

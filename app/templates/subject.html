@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ subject.name }} — Учебные тесты{% endblock %}
+{% block content %}
+<header class="top">
+  <div class="wrap">
+    <h1>{{ subject.name }}</h1>
+    <a href="/">← Все предметы</a>
+  </div>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>Новый тест</h2>
+    <form method="post" action="/subjects/{{ subject.id }}/tests">
+      <div class="form-field">
+        <input type="text" name="title" placeholder="Название теста, например: Контрольная №1" required>
+      </div>
+      <button type="submit">Создать тест</button>
+    </form>
+  </div>
+
+  <h2>Тесты</h2>
+  {% if tests %}
+    {% for t in tests %}
+      <div class="list-item">
+        <div class="main">
+          <div class="title">{{ t.title }}</div>
+          <div class="sub">
+            {{ t.questions|length }} вопрос(ов) ·
+            <span class="badge {{ t.status }}">{{ t.status }}</span>
+          </div>
+        </div>
+        <div class="row">
+          <a class="btn secondary" href="/tests/{{ t.id }}/edit">Редактировать</a>
+          {% if t.status == "draft" %}
+            <form method="post" action="/tests/{{ t.id }}/delete" onsubmit="return confirm('Удалить тест?')">
+              <button type="submit" class="btn danger">Удалить</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card muted">Тестов пока нет — создайте первый.</div>
+  {% endif %}
+</main>
+{% endblock %}

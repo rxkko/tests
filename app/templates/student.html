@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Тест{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="spread mb">
+    <div>
+      <div class="small muted">Вы вошли как</div>
+      <strong style="font-size:1.1rem">{{ participant.name }}</strong>
+    </div>
+    <div class="small muted">Тест: {{ test.title }}</div>
+  </div>
+  <div id="app"></div>
+</main>
+
+<script>
+const testId = {{ test.id }};
+const participantId = {{ participant.id }};
+const myName = {{ participant.name | tojson }};
+
+const ws = new WebSocket(
+  (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/student/' + testId + '/' + participantId
+);
+
+const app = document.getElementById('app');
+let myOptionId = null;
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function leaderboardHtml(items) {
+  const myId = participantId;
+  return `<ul class="leaderboard">` + items.map((p, i) => {
+    const me = p.id === myId ? ' (я)' : '';
+    return `<li>
+      <span class="pos">${i + 1}</span>
+      <span class="name">${escapeHtml(p.name)}${me}</span>
+      <span class="pts">${p.score}</span>
+    </li>`;
+  }).join('') + `</ul>`;
+}
+
+function showLobby(msg) {
+  const names = msg.participants.map(n => `<li><span>${escapeHtml(n)}</span></li>`).join('');
+  app.innerHTML = `
+    <div class="center-screen">
+      <div class="big-emoji">⏳</div>
+      <h1>Вы в списке!</h1>
+      <p class="muted">Ждите, пока преподаватель начнёт викторину.</p>
+      <div class="card" style="width:100%;max-width:380px">
+        <h2>Участники (${msg.participants.length})</h2>
+        <ul class="participants">${names || '<li class="muted small">Пока только вы</li>'}</ul>
+      </div>
+    </div>`;
+}
+
+function showQuestion(msg) {
+  myOptionId = null;
+  const opts = msg.options.map(o => `
+    <button class="option-btn" data-id="${o.id}">${escapeHtml(o.text)}</button>`).join('');
+  app.innerHTML = `
+    <div class="card">
+      <div class="spread mb">
+        <span class="badge active">Вопрос ${msg.index + 1} из ${msg.total}</span>
+        <span class="small muted">${msg.time_limit} сек</span>
+      </div>
+      <div style="font-size:1.2rem;font-weight:600;margin-bottom:14px">${escapeHtml(msg.text)}</div>
+      <div class="options">${opts}</div>
+    </div>`;
+
+  app.querySelectorAll('.option-btn').forEach(btn => {
+    btn.onclick = () => {
+      if (myOptionId !== null) return;
+      myOptionId = parseInt(btn.dataset.id, 10);
+      app.querySelectorAll('.option-btn').forEach(b => {
+        b.disabled = true;
+        if (parseInt(b.dataset.id, 10) === myOptionId) b.classList.add('selected');
+      });
+      ws.send(JSON.stringify({ type: 'answer', option_id: myOptionId }));
+    };
+  });
+}
+
+function showResult(msg) {
+  // перерисовать текущий вопрос с подсветкой, если он ещё на экране
+  const buttons = app.querySelectorAll('.option-btn');
+  buttons.forEach(b => {
+    const id = parseInt(b.dataset.id, 10);
+    b.disabled = true;
+    if (id === msg.correct_option_id) b.classList.add('correct');
+    if (id === msg.your_option_id && !msg.correct) b.classList.add('wrong');
+  });
+
+  const block = msg.correct
+    ? `<div class="result-correct">✓ Верно! +${msg.points} очков</div>`
+    : `<div class="result-wrong">✗ Неверно</div>`;
+
+  let tail = document.getElementById('result-tail');
+  if (!tail) {
+    tail = document.createElement('div');
+    tail.id = 'result-tail';
+    tail.className = 'card mt text-center';
+    app.appendChild(tail);
+  }
+  tail.innerHTML = `
+    <div style="font-size:1.6rem;font-weight:800">${block}</div>
+    <div class="muted small mt">Всего очков: ${msg.total_score}</div>
+    <div class="muted small mt">Ждём следующий вопрос…</div>`;
+}
+
+function showWaiting() {
+  app.innerHTML = `
+    <div class="center-screen">
+      <div class="big-emoji">⏳</div>
+      <h1>Ждите следующий вопрос</h1>
+    </div>`;
+}
+
+function showFinished(msg) {
+  app.innerHTML = `
+    <div class="card">
+      <h2 class="text-center">🏆 Результаты</h2>
+      ${leaderboardHtml(msg.leaderboard)}
+      <p class="muted small text-center mt">Спасибо за участие!</p>
+    </div>`;
+}
+
+function showClosed() {
+  app.innerHTML = `
+    <div class="center-screen">
+      <div class="big-emoji">🔄</div>
+      <h1>Тест перезапущен</h1>
+      <p class="muted">Попросите у преподавателя новый код и войдите заново.</p>
+    </div>`;
+}
+
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  switch (m.type) {
+    case 'lobby': showLobby(m); break;
+    case 'question': showQuestion(m); break;
+    case 'answer_result': showResult(m); break;
+    case 'waiting': showWaiting(); break;
+    case 'finished': showFinished(m); break;
+    case 'closed': showClosed(); break;
+  }
+};
+
+ws.onclose = () => {
+  app.innerHTML = '<div class="center-screen"><h1>Соединение потеряно</h1><p class="muted">Обновите страницу.</p></div>';
+};
+
+app.innerHTML = '<div class="center-screen"><h1>Подключение…</h1></div>';
+</script>
+{% endblock %}

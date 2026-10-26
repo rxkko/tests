@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Вход в тест{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="center-screen">
+    <div class="big-emoji">🎓</div>
+    <h1>Присоединиться к тесту</h1>
+    <div class="card" style="width:100%;max-width:380px">
+      <form method="post" action="/join">
+        <div class="form-field">
+          <label>Код теста</label>
+          <input type="tel" name="code" placeholder="6-значный код" maxlength="6" inputmode="numeric" required autofocus>
+        </div>
+        <div class="form-field">
+          <label>Ваше имя</label>
+          <input type="text" name="name" placeholder="Имя и фамилия" maxlength="30" required>
+        </div>
+        <button type="submit" class="btn big">Войти</button>
+      </form>
+      {% if request.query_params.get('error') %}
+        <p class="small" style="color:var(--danger)">Код не найден или тест не запущен.</p>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

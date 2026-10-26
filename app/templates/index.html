@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Предметы — Учебные тесты{% endblock %}
+{% block content %}
+<header class="top">
+  <div class="wrap">
+    <h1>Учебные тесты</h1>
+    <a href="/join">Я ученик → ввести код</a>
+  </div>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>Новый предмет</h2>
+    <form method="post" action="/subjects">
+      <div class="form-field">
+        <input type="text" name="name" placeholder="Например: Математика" required>
+      </div>
+      <button type="submit">Добавить предмет</button>
+    </form>
+  </div>
+
+  <h2>Предметы</h2>
+  {% if subjects %}
+    {% for s in subjects %}
+      <div class="list-item">
+        <div class="main">
+          <div class="title">{{ s.name }}</div>
+          <div class="sub">{{ s.tests|length }} тест(ов)</div>
+        </div>
+        <a class="btn secondary" href="/subjects/{{ s.id }}">Открыть</a>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="card muted">Пока нет ни одного предмета.</div>
+  {% endif %}
+</main>
+{% endblock %}
